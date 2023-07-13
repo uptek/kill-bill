@@ -1,0 +1,56 @@
+Kill Bill is a generic platform to build billing and payment infrastructures and as such, it is agnostic of payment gateways. However, it provides a framework to register payment plugins, which in turn implement gateway specific APIs.
+
+=== Terminology
+
+Throughout this document, we will be using the following terminology:
+
+*E-commerce application/merchant website/client application* - Application that integrates with Kill Bill.
+
+*End-user/customer* - User that uses the e-commerce application.
+
+*Payment-related APIs* - Kill Bill APIs that perform payment related operations.
+
+*Payment plugin* - Piece of code that resides within Kill Bill and implements payment gateway specific APIs/interacts with the payment gateway.
+
+*Payment gateway/payment provider* - Entity that processes the payment.
+
+*Account* - A customer account in Kill Bill corresponding to an end-user.
+
+*Payment Method* - A record of the details required for Kill Bill to trigger a payment. Payment Methods represent things like credit cards, debit cards, or PayPal accounts.  An account can have multiple payment methods corresponding to different payment gateways.
+
+*Payment* - A Kill Bill record that encapsulates charging an end-user against a payment method. It has a state that indicates the status of the underlying transaction.
+
+
+=== How Payment Works
+
+The following diagram provides a high level overview of the payment system in Kill Bill:
+
+image::../assets/img/payment-userguide/payment-system-overview.svg[width=650,align=center]
+
+The Kill Bill payment system consists of Kill Bill's https://docs.killbill.io/latest/userguide_payment.html#components-api-overview[payment related APIs] and https://docs.killbill.io/latest/payment_plugin.html[payment plugins]. The Kill Bill APIs can be used by an external e-commerce application (to trigger one-off payments), by the Kill Bill core engine (to process recurring payments) and by https://docs.killbill.io/latest/userguide_kaui.html[Kill Bill Admin UI (Kaui))] (to process refunds, chargebacks, etc). The payment-related APIs then interact with the payment gateway via a payment plugin specific to the gateway.
+
+==== Payment Methods Overview
+
+As explained earlier, a payment method represents an abstraction corresponding to a payment scheme like a credit card, debit card, or PayPal. An account can have multiple payment methods corresponding to different payment gateways. For example, an account can have a credit card payment method as well as a Paypal payment method.
+
+Each account also has a *default* payment method associated with it. When the account needs to be charged for recurring payments, the default payment method is used. Additionally, a client application can also override the payment method to use on a per payment call.
+
+==== Payment Plugins Overview
+
+As explained earlier, each payment gateway needs to have a gateway specific plugin within Kill Bill. Thus, at any time, there can be multiple  payment plugins registered with Kill Bill, each of which interacts with a different payment gateway. When the Kill Bill system charges a customer against a particular payment method, the plugin associated with that payment method is used. 
+
+The figure below shows the relationship between a Kill Bill `Account`, its various `PaymentMethods`, each of which points to a `Kill Bill plugin`, which in turn interacts with a third party payment gateway.
+
+image::../assets/img/payment-userguide/payment-plugin-overview.svg[width=650,align=center]
+
+Kill Bill provides many open-source https://docs.killbill.io/latest/plugin_introduction.html#payment_gateways[payment plugins] corresponding to different payment gateways. In addition, Kill Bill also has a https://github.com/killbill/killbill-plugin-api[Plugin API] that can be used for developing a custom payment plugin corresponding to a specific payment gateway (as explained in the https://docs.killbill.io/latest/payment_plugin.html[_Plugin Development Guide_]).
+
+By default, Kill Bill does not come configured with any payment plugins. So, if you would like to install an existing plugin or a custom plugin, you need to do this seprately as explained in the https://docs.killbill.io/latest/plugin_installation.html[_Plugin Installation Guide_].
+
+
+However, Kill Bill does have a built-in payment method called `\___EXTERNAL_PAYMENT___`. This can be used to track payments that occur outside of Kill Bill. For example, a customer may be invoiced through Kill Bill and may later make a payment by check. The payment needs to be recorded into the system to mark the invoice as being paid and to bring its balance to zero. In such cases, the payment can be recorded against the `\___EXTERNAL_PAYMENT___` payment method.
+
+
+
+
+

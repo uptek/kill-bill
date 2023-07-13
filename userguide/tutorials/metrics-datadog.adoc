@@ -1,0 +1,110 @@
+= Managing Metrics with Datadog
+
+:imagesdir: https://github.com/killbill/killbill-docs/raw/v3/userguide/assets/aws
+
+
+== Overview
+
+Several third party tools are available to manage and display Kill Bill's metrics. One popular tool is https://www.datadoghq.com/[Datadog]. This
+package offers a low-cost option to monitor and display whatever metrics
+you may find useful from the Kill Bill collection, including metrics
+that show the performance and resource use of Kill Bill and Kaui
+themselves, and metrics describing the infrastructure on which these
+systems run.
+
+Datadog can be integrated with several types of Kill Bill installations. In this document we discuss the use of Datadog to manage metrics produced
+by single-tier and multi-tier implementations on Amazon Web Services (AWS).
+With the latest Amazon Machine Image (AMI)
+for Kill Bill, the application is preconfigured to collect these metrics and to direct them to Datadog once authorization is provided. These instructions apply to the Kill Bill AMI version 2021.9 or later.
+
+To set up Datadog to manage the metrics available from Kill Bill, there
+are just two steps:
+
+1. setup a Datadog account
+2. Edit a configuration file to enable the transfer of the complete Kill Bill metrics.
+
+ 
+== Set Up Datadog
+
+You may already be familiar with Datadog. If not, this section will
+explain how to get started.
+
+First, go to the https://www.datadoghq.com/[Datadog website]. Datadog
+offers a free trial to get started. After the trial, you will be charged
+monthly depending on what types of information you want them to manage.
+To sign up for the free trial, select "GET STARTED FREE" at the top of
+the page.
+
+When you login to Datadog you will be taken to the Welcome page. Note
+the series of menu options on the left hand side.
+
+
+== Set Up the Authorization
+
+To authorize the sending of the Kill Bill metrics, it is necessary to
+edit two lines in this file:
+
+```
+/var/lib/tomcat/bin/setenv2.sh
+```
+
+This file contains configuration information for `tomcat`, which manages the
+KillBill web applications.
+
+This is a small file. The two lines to be edited are:
+
+```
+-Dcom.killbill.datadog.enable=false
+-Dcom.killbill.datadog.apiKey=
+```
+
+These should be changed to:
+
+```
+-Dcom.killbill.datadog.enable=true
+-Dcom.killbill.datadog.apiKey=Your-API-Key
+```
+
+To find your API key:
+
+. Go to the Datadog Welcome page
+. Scroll down to your email address in the left menu
+. Select *Organization Settings* from the popup menu
+. Select *API Keys* from the Organization Settings menu
+
+After editing the file, go to your AWS EC2 dashboard and *reboot the
+instance* so the new configuration file will be read. If you have more
+than one instance, follow the same procedure for each one.
+
+== Test the Installation
+
+To test the installation, return to datadog and choose *Infrastructure*,
+then *Infrastructure List* from the left menu. The table that appears
+should list all of your hosts and indicate their status as *ACTIVE*. You
+may need to wait a few minutes for the table to appear.
+
+Now select *Metrics*, then *Summary* from the menu. After a short delay, you should see a
+long list of metrics -- well over 1,000. 
+
+Congratulations. Your Datadog integration is complete!
+
+== Using Datadog
+
+The Datadog site has lots of https://docs.datadoghq.com/[documentation], so we won't
+repeat any of that here. We will just suggest a few quick steps to get
+started:
+
+. Go to *Metrics* in the menu and *Explorer* in the submenu. Click on
+the field labeled *Graph:* to get a dropdown list of all available
+metrics.
+. Select some metrics to see the graph they produce. Identify the ones
+you would like to see together in a dashboard.
+. Gather the names of the metrics you want in the *Graph:* field
+together.
+. Under *Export these graphs to:* select *New Dashboard*. Give your
+dashboard a name.
+
+Your dashboard will appear in the *Dashboard List* under the
+*Dashboards* menu item. You can create and modify multiple dashboards.
+You can also adjust the graphs in many ways, and do lots of other things
+like setting alarms. Have fun and good luck!

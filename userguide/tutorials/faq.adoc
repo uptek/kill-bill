@@ -1,0 +1,52 @@
+= Technical FAQs
+
+For general information about Kill Bill, including its features, visit the https://killbill.io/faqs/[FAQs] on our website.
+
+== How stable are your APIs?
+
+We have two release trains:
+
+* The latest release with an even minor number (e.g., 0.22.x) is stable (APIs are backward compatible).
+* The development team uses odd minor numbers for developing new features (0.17.x, 0.19.x, 0.21.x, etc.). API and DDL changes are frequent.
+
+== What kind of tests do you perform?
+
+Before each release, there are thousands of tests that we perform:
+
+* Unit tests
+* Functional tests
+* Java library integration tests
+* Server integration tests to check the REST APIs
+* Client APIs integration tests
+
+However, note that Kill Bill is a platform to build billing systems. There are many combinations of configurations possible, and we cannot test them all. We provide a test framework to help you verify your system before going to production.
+
+Also, take extra care when installing third-party plugins. Only the plugins hosted on our https://github.com/killbill/[killbill organization on GitHub] are officially supported.
+
+== Where is the code?
+
+Our code is hosted on https://github.com[GitHub], in the https://github.com/killbill[killbill] organization.
+
+== We are not a Java shop. Can we still use Kill Bill?
+
+Yes! We try to hide most of the complexity, so you can simply use Kill Bill as a service, using our client libraries. Currently, plugins can only be written in Java or Ruby.
+
+== What is a (subscription) bundle?
+
+A bundle is a collection of subscriptions. A typical bundle has exactly one BASE subscription and a collection of ADD_ONs. Logically grouping these subscriptions makes it easier to automatically cancel all ADD_ONs when the BASE subscription is canceled, for example.
+
+== Can I create subscriptions without billing information?
+
+Yes! If you are not ready to charge your customers (for example, during an activation phase), you can configure your plan with an initial free phase. Alternatively, you can set the `AUTO_PAY_OFF` tag on the customer account, and Kill Bill generates invoices but won’t attempt to charge them. When you decide to remove this tag, payments will automatically occur.
+
+== Can I create an account without a subscription?
+
+Absolutely! Having an account without a subscription is useful during onboarding flows. For example, you may need your customer in your CRM engine, databases, and so forth before she has signed up.
+
+== What are the environment requirements?
+
+Specifying definite environment requirements is tricky because it depends on the plugins you want to run, your expected traffic, etc. If in doubt, ask the https://groups.google.com/forum/#!forum/killbilling-users[Kill Bill Community] (mailing-list). Remember to provide your details!
+
+== How can I listen to Kill Bill events?
+
+You can either write a custom plugin (all Kill Bill events are visible to plugins) or register an endpoint that Kill Bill will send events to via HTTP POST (check our https://docs.killbill.io/latest/push_notifications.html[push notifications] documentation).

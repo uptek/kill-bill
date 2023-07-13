@@ -1,0 +1,24 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    asciidoctor (2.0.20)
+    concurrent-ruby (1.1.10)
+    pygments.rb (2.0.0)
+    slim (4.0.1)
+      temple (>= 0.7.6, < 0.9)
+      tilt (>= 2.0.6, < 2.1)
+    temple (0.8.2)
+    tilt (2.0.11)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  asciidoctor (~> 2.0.0)
+  concurrent-ruby (~> 1.1.0)
+  pygments.rb (~> 2.0.0)
+  slim (~> 4.0.0)
+  tilt (~> 2.0.0)
+
+BUNDLED WITH
+   1.17.2

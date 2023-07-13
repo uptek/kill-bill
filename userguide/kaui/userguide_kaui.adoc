@@ -1,0 +1,201 @@
+= Kaui Guide
+:doctype: book
+:revdate: May 2022
+:revremarks: first version
+:toc:
+:toclevels: 2
+:figure-caption!:
+:icons: font
+
+//:imagesdir: C:\_My Documents\FlowWritingLLC\Projects\Kill Bill\Documentation\killbill-docs\userguide\assets\img\kaui
+
+//Formal location: imagesdir: https://github.com/killbill/killbill-docs/blob/v3/userguide/assets/img/kaui
+
+//Ruby30-x64
+//Command to convert to PDF:
+//Asciidoctor-pdf "C:/_My Documents/FlowWritingLLC/Projects/Kill Bill/Documentation/killbill-docs/userguide/kaui/userguide_kaui.adoc"
+
+//WRITER RESOURCES
+//https://docs.asciidoctor.org/asciidoc/latest/syntax-quick-reference/
+//https://asciidoctor.org/docs/asciidoctor-pdf/
+//https://github.com/asciidoctor/asciidoctor.org/blob/main/docs/asciidoc-writers-guide.adoc
+//https://github.com/asciidoctor/asciidoctor-pdf/tree/main#readme
+//https://github.com/asciidoctor/asciidoctor-pdf/blob/main/docs/theming-guide.adoc#keys-extends
+//https://drive.google.com/drive/folders/1pls6kR1tmvkMisy64pPVSlicxnMZgHFO (P's videos)
+//https://drive.google.com/drive/folders==/1gmtaGIc2d9MGrgRYPfrZRIAZO3UfnCU3 (Dinah's images)
+
+== Introduction
+
+include::{sourcedir}/kaui/includes/intro.adoc[]
+
+//include::includes/intro.adoc[]
+
+//________________________________________________//
+
+[[getting_started]]
+== Getting Started
+
+include::{sourcedir}/kaui/includes/getting-started.adoc[]
+
+//include::includes/getting-started.adoc[]
+
+//________________________________________________//
+
+[[accounts]]
+== Accounts
+
+include::{sourcedir}/kaui/includes/accounts.adoc[]
+
+//include::includes/accounts.adoc[]
+
+//________________________________________________//
+
+[[payment_methods]]
+== Payment Methods
+
+include::{sourcedir}/kaui/includes/payment-methods.adoc[]
+
+//include::includes/payment-methods.adoc[]
+
+//________________________________________________//
+
+[[subscriptions]]
+== Subscriptions
+
+include::{sourcedir}/kaui/includes/subscriptions.adoc[]
+
+//include::includes/subscriptions.adoc[]
+
+//________________________________________________//
+
+[[invoices]]
+== Invoices
+
+include::{sourcedir}/kaui/includes/invoices.adoc[]
+
+//include::includes/invoices.adoc[]
+
+//________________________________________________//
+
+[[payments]]
+== Payments
+
+include::{sourcedir}/kaui/includes/payments.adoc[]
+
+//include::includes/payments.adoc[]
+
+//________________________________________________//
+
+[[timeline]]
+== Timeline
+
+include::{sourcedir}/kaui/includes/timeline.adoc[]
+
+//include::includes/timeline.adoc[]
+
+//________________________________________________//
+
+[[tenants]]
+== Tenants
+
+include::{sourcedir}/kaui/includes/tenants.adoc[]
+
+//include::includes/tenants.adoc[]
+
+//________________________________________________//
+
+[[users_roles_and_permissions]]
+== Users, Roles, and Permissions 
+
+include::{sourcedir}/kaui/includes/users.adoc[]
+
+//include::includes/users.adoc[]
+
+//________________________________________________//
+
+[[catalog]]
+== Catalog 
+
+include::{sourcedir}/kaui/includes/catalog.adoc[]
+
+//include::includes/catalog.adoc[]
+
+//________________________________________________//
+
+[[overdue]]
+== Overdue 
+
+include::{sourcedir}/kaui/includes/overdue.adoc[]
+
+//include::includes/overdue.adoc[]
+
+//________________________________________________//
+
+[[translation_files]]
+== Translation Files 
+
+include::{sourcedir}/kaui/includes/translation-files.adoc[]
+
+//include::includes/translation-files.adoc[]
+
+//________________________________________________//
+
+[[tags]]
+== Tags
+
+include::{sourcedir}/kaui/includes/tags.adoc[]
+
+//include::includes/tags.adoc[]
+
+//________________________________________________//
+
+[[custom_fields]]
+== Custom Fields
+
+include::{sourcedir}/kaui/includes/custom-fields.adoc[]
+
+//include::includes/custom-fields.adoc[]
+
+//________________________________________________//
+
+//== Plugin Config
+
+//include::{sourcedir}/kaui/includes/plugin-config.adoc[]
+
+//include::includes/plugin-config.adoc[]
+
+//________________________________________________//
+
+[[plugin_manager]]
+== Plugin Manager [[plugin-manager]]
+
+include::{sourcedir}/kaui/includes/plugin-manager.adoc[]
+
+//include::includes/plugin-manager.adoc[]
+
+//________________________________________________//
+
+[[analytics]]
+== Analytics 
+
+include::{sourcedir}/kaui/includes/analytics.adoc[]
+
+//include::includes/analytics.adoc[]
+
+//________________________________________________//
+
+//== Admin
+
+//include::{sourcedir}/kaui/includes/admin.adoc[]
+
+//include::includes/admin.adoc[]
+
+//________________________________________________//
+
+//== FAQs
+
+//include::{sourcedir}/kaui/includes/faqs.adoc[]
+
+//include::includes/faqs.adoc[]
+
+//________________________________________________//

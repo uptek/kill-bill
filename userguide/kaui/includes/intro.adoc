@@ -1,0 +1,88 @@
+=== PDF Version of _Kaui Guide_
+
+_To download a PDF version of this guide, click https://github.com/killbill/killbill-docs/blob/v3/userguide/kaui/userguide_kaui.pdf[here]._
+
+//THE ABOVE ^^ NEEDS TO BE COMMENTED OUT WHEN GENERATING THE PDF!
+
+=== What Is Kaui?
+"Kaui" (KAUI) stands for Kill (Bill) Admin User Interface. This self-contained web application interacts with Kill Bill over HTTPS.
+
+Backoffice staff (for example, Support or Finance) will find Kaui useful to process refunds, credits, chargebacks, and so forth. Kaui also enables the Kill Bill administrator to perform more advanced tasks, such as managing tags, uploading a catalog, and configuring the tenant(s).
+
+Other types of users who might find Kaui useful are developers (for testing), operations, and product managers.
+
+[NOTE]
+*Note:* For Developers: Kaui functionality is provided via a series of Ruby on Rails mountable engines. You can extend its functionality (for example, to provide a custom UI for your plugins) by mounting your own engine(s).
+
+=== How to Use This Guide
+
+The first half of this guide explains the more basic components:
+
+* <<getting_started, Getting Started>>
+* <<basic_search, Basic search>> and <<advanced_search, Advanced search>>
+* <<accounts, Accounts>>
+* <<payment_methods, Payment methods>>
+* <<subscriptions, Subscriptions>>
+* <<invoices, Invoices>>
+* <<payments, Payments>>
+* <<timeline, Timeline>>
+
+Advanced and administrative features are covered in the second half of the guide:
+
+* <<tenants, Tenants>>
+* <<users_roles_and_permissions, Users, roles, and permissions>>
+* <<catalog, Catalog>>
+* <<overdue, Overdue>>
+* <<translation_files, Translation files>>
+* <<tags, Tags>>
+* <<custom_fields, Custom fields>>
+
+//The <<FAQs>> are great for *basic questions* like, _How do I create an invoice?_
+
+[NOTE]
+*Note:* The Plugin Manager and Analytics functionality is currently undocumented.
+
+=== About Screenshots
+
+The screenshots displayed in this guide may differ from what you see on your Kaui screen. That's because your user permissions control what features you can access (i.e., what you see on the screen).
+
+If you have any questions about why your Kaui screen doesn't match what you see in this guide, ask your Kaui administrator.
+
+=== Other Learning Resources
+
+==== Videos
+We regularly add new overviews and tutorials to https://www.youtube.com/c/KillbillIoOSS[our YouTube videos], so check in from time to time.
+
+[glossary]
+==== Glossary
+
+The terms listed below are used frequently in this guide. We've provided an abbreviated description below. For a full description, see the
+https://docs.killbill.io/latest/Kill-Bill-Glossary.html[_Kill Bill Glossary_].
+
+Account (a.k.a. customer account):: A record that contains details about the customer (name, address, etc.).
+
+Child:: An account that is associated with a parent account.
+
+External Key:: An alternative unique ID for an object.
+
+Parent:: An account that contains one or more child accounts.
+
+Payment Method:: A record of the details required for Kill Bill to trigger a payment.
+
+Permissions:: In Kill Bill, a defined action that can be performed in a system (for example, `TAG_CAN_ADD` OR `ACCOUNT_CAN_CREATE`). You can assign one or more permissions to a role, which can then be associated with a user. The user can only perform the permissions associated with that role.
+
+Plan:: Define how much a customer pays for a product and the frequency of the payment.
+
+Plugin:: Software that runs alongside Kill Bill in order to provide additional functionality.
+
+Phase (a.k.a plan phase):: Time periods within a subscription during which certain rules apply.
+
+Subscription:: A contract between you (the business) and a customer that associates an account with a plan and a specific start date.
+
+Tag:: A property that can be added to an object (for example, an account or a subscription) for information purposes or to affect the behavior of the system.
+
+Tenant:: The division or organization that is using Kill Bill as a group of users. Note that an organization can have more than one tenant, as Kill Bill supports multi-tenancy.
+
+User:: A person who logs on to use Kaui.
+
+User Role:: A group of permissions that specify which actions the user is allowed to perform in Kaui. A user can have multiple roles. A role can have multiple permissions.

@@ -1,0 +1,680 @@
+= Overdue System
+
+[[intro]]
+In this tutorial, we look a little bit deeper into Kill Bill's payment retry system and overdue system. The main https://docs.killbill.io/latest/userguide_subscription.html[_Subscription User Guide_] already explains some basics about these systems. This tutorial will show you how they work in practice.
+
+== Prerequisites
+
+* Ensure that you have configured Kill Bill, Kaui and the database as explained in the https://docs.killbill.io/latest/getting_started.html[_Getting Started_] document.
+* Ensure that you have set up a tenant configured with API key `bob` and API secret `lazar`.
+* Ensure that the `org.killbill.server.test.mode=true` property is set as explained in the https://docs.killbill.io/latest/userguide_configuration.html[_Configuration Guide_]. This property allows moving the clock through time. 
+* Ensure that you have gone through the https://docs.killbill.io/latest/userguide_subscription.html[_Subscription User Guide_] and are familiar with catalogs, invoices, payments and other concepts.
+* Ensure that you have https://curl.haxx.se/[_cURL_] installed. If you are on Windows, we recommend that you use https://git-scm.com/download/win[_Git Bash_] to run the `cURL` commands.
+
+== Overdue and Payment Retry System Overview
+
+Before we dive into the details, let us understand some high-level concepts.
+
+Kill Bill has two distinct built-in mechanisms. These are the *Payment Retry System* and the *Overdue System*. Though separate, these two systems work in close conjunction with each other.
+
+The *Payment Retry System* is a system that retries failed payments as per a defined schedule. The schedule can be defined via a property in the Kill Bill configuration file or can be uploaded on a per-tenant basis.
+
+The *Overdue System* defines the flow that the system must follow when an account is overdue (that is, has an unpaid balance). It can be configured via an XML file. The XML file can be specified via a property in the Kill Bill configuration file or can be uploaded on a per-tenant basis. The XML file defines the various _states_ that the account must go through, the _change in the user's entitlements_ when the account is transitioned from one state to the other and the _period_ after which the state is re-evaluated. 
+
+It is important to understand that the *Payment Retry System* and the *Overdue System* are *independent* of each other. So, the *payment retry system* attempts payments as per its retry schedule while the *overdue system* moves the account from one state to the other as per its configuration.
+
+Having said that, most business cases would require to retry payments several times before blocking the user's access and thus would require using both systems in conjunction with one another. 
+
+Although the payment retry system and overdue systems need to be configured independently of each other, it makes sense to *align payment retries with overdue states*. This allows retrying the payment on the boundary of each overdue state and thus prevents transitioning from one state to the next if the payment gets retried successfully. Further, to ensure that the payment is always retried before the overdue system, it makes sense to configure a payment retry 1 day before each overdue state. 
+
+== Scenario
+
+Let us now define a test scenario and understand how to configure the payment retry system and overdue system.
+
+Let's assume you want to build a website where your customers can subscribe to movies (similar to Netflix). For simplicity's sake, we will assume you only provide one $10/month plan for unlimited streaming. The plan will contain a 10 days trial period during which customers have unlimited access. After the trial period, the customer should be invoiced with $10. We would also want to take some actions if the user fails to pay:
+
+1. The system should be configured to retry failed payments 4 times: the first payment retry should happen 1 day after the payment failure, the next attempt should happen 8 days after previous attempt, the third attempt should happen 4 days after the previous attempt and the last one should happen 7 days after the previous attempt
+2. The system should notify the user when an invoice has not been paid after 10 days (during which time the system already automatically retried 2 times)
+3. The system should block the entitlements associated with the account after 14 days
+4. The system should automatically cancel the subscriptions after 21 days
+
+
+Additionally, we want to prevent users from changing plans (e.g. upgrade) until they clear their balance.
+
+So, the scenario specified above requires configuring 3 overdue states. The account should be moved to the first overdue state 10 days after an unpaid invoice, it should move to the second overdue state 14 days after the unpaid invoice and it should be moved to the final overdue state 21 days after the unpaid invoice. 
+
+Further, the scenario above also specifies the payment retries in such a way that they align with the overdue states. So, it requires the second payment attempt to be made after 9 days (just before the first overdue state), the third payment attempt after 13 days (before the second overdue state) and the final payment attempt after 20 days (before the last overdue state). Thus, we are configuring the system to retry payments 1 day before each overdue state.
+
+Let us now understand how to to configure both the *Payment Retry System* and the *Overdue system* in order to implement this scenario.
+
+== Configuration of the System
+
+=== Catalog Configuration
+
+First of all, you will need to create a catalog. Your catalog will contain a plan entry that specifies two phases, one for the trial period of 10 days and one for the recurring monthly charge of $10:
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CatalogSchema.xsd ">
+    <effectiveDate>2013-02-08T00:00:00+00:00</effectiveDate>
+    <catalogName>Movies</catalogName>
+    <recurringBillingMode>IN_ADVANCE</recurringBillingMode>
+    <currencies>
+        <currency>USD</currency>
+    </currencies>
+    <products>
+        <product name="Movies">
+            <category>BASE</category>
+        </product>
+    </products>
+    <rules>
+        <changePolicy>
+            <changePolicyCase>
+                <policy>IMMEDIATE</policy>
+            </changePolicyCase>
+        </changePolicy>
+        <cancelPolicy>
+            <cancelPolicyCase>
+                <policy>IMMEDIATE</policy>
+            </cancelPolicyCase>
+        </cancelPolicy>
+    </rules>
+    <plans>
+      <plan name="movies-monthly">
+          <product>Movies</product>
+          <initialPhases>
+             <phase type="TRIAL">
+                 <duration>
+                     <unit>DAYS</unit>
+                     <number>10</number>
+                 </duration>
+                 <fixed>
+                   <fixedPrice>
+                   </fixedPrice>                   
+                 </fixed>
+             </phase>
+          </initialPhases>
+          <finalPhase type="EVERGREEN">
+              <duration>
+                  <unit>UNLIMITED</unit>
+              </duration>
+              <recurring>
+                  <billingPeriod>MONTHLY</billingPeriod>
+                  <recurringPrice>
+                      <price>
+                          <currency>USD</currency>
+                          <value>10.00</value>
+                      </price>
+                  </recurringPrice>
+              </recurring>
+          </finalPhase>
+      </plan>
+    </plans>
+    <priceLists>
+        <defaultPriceList name="DEFAULT">
+            <plans>
+                <plan>movies-monthly</plan>
+            </plans>
+        </defaultPriceList>
+    </priceLists>
+</catalog>
+----
+
+You can upload the catalog by hitting the following endpoint:
+
+[source,bash]
+----
+curl -v \
+-u 'admin:password' \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: text/xml" \
+-H "X-Killbill-CreatedBy: stephane" \
+-X POST \
+-d @/VALID_PATH/catalog.xml \
+"http://127.0.0.1:8080/1.0/kb/catalog/xml"
+----
+
+In order to understand more about catalogs, you can refer to the https://docs.killbill.io/latest/userguide_subscription.html#components-catalog[_Subscription Billing_] document.
+
+=== Overdue Configuration
+
+Next, you need to define the overdue configuration XML file. 
+
+==== Creating Overdue.xml File
+
+Based on the scenario defined above, the overdue configuration will define the three states the account will go through:
+
+1. The account will enter the `WARNING` state 10 days after the first unpaid invoice (Trial period will last for 10 days, after which a $10 invoice will be generated. 10 days after this (20 days after the subscription creation), the account needs to enter the `WARNING` state)
+2. 4 days later, the account will move to the `BLOCKED` state
+3. 7 days later, the account will move to the `CANCELLATION` state.
+
+You can create an XML file corresponding to this overdue configuration as follows:
+
+[source,xml]
+----
+<overdueConfig>
+   <accountOverdueStates>
+       <initialReevaluationInterval>
+           <unit>DAYS</unit><number>10</number>
+       </initialReevaluationInterval>
+       <state name="CANCELLATION">
+           <condition>
+               <timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+                   <unit>DAYS</unit><number>21</number>
+               </timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+           </condition>
+           <externalMessage>Reached CANCELATION</externalMessage>
+           <subscriptionCancellationPolicy>END_OF_TERM</subscriptionCancellationPolicy>
+       </state>
+       <state name="BLOCKED">
+           <condition>
+               <timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+                   <unit>DAYS</unit><number>14</number>
+               </timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+           </condition>
+           <externalMessage>Reached BLOCKED</externalMessage>
+           <blockChanges>true</blockChanges>
+           <disableEntitlementAndChangesBlocked>false</disableEntitlementAndChangesBlocked>
+           <autoReevaluationInterval>
+               <unit>DAYS</unit><number>7</number>
+           </autoReevaluationInterval>
+       </state>
+       <state name="WARNING">
+           <condition>
+               <timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+                   <unit>DAYS</unit><number>10</number>
+               </timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+           </condition>
+           <externalMessage>Reached WARNING</externalMessage>
+           <blockChanges>true</blockChanges>
+           <disableEntitlementAndChangesBlocked>false</disableEntitlementAndChangesBlocked>
+           <autoReevaluationInterval>
+               <unit>DAYS</unit><number>4</number>
+           </autoReevaluationInterval>
+       </state>
+   </accountOverdueStates>
+</overdueConfig>
+----
+
+In more detail:
+
+* `initialReevaluationInterval` is set to 10 (if no payment is posted, the overdue state is recomputed 10 days later to match `timeSinceEarliestUnpaidInvoiceEqualsOrExceeds`)
+* `WARNING`:
+** `timeSinceEarliestUnpaidInvoiceEqualsOrExceeds` is set to 10 days as specified by the scenario
+** `blockChanges` is set to true to prevent users from changing plans
+** `disableEntitlementAndChangesBlocked` is set to false, since we still want the user to have access to the service
+** `autoReevaluationInterval` is set to 4 days to make sure that if there is no payment (which would trigger a re-evaluation of the overdue state), the state will be correctly recomputed and transition to `BLOCKED` 4 days later
+* `BLOCKED`:
+** `blockChanges` is set to true to prevent users from changing plans
+** `timeSinceEarliestUnpaidInvoiceEqualsOrExceeds` is set to 14 days as specified by the scenario
+** `disableEntitlementAndChangesBlocked` is also set to false. This configuration also has an impact on the billing so setting it to true would block the billing (and entitlement) from that date forward.
+** `autoReevaluationInterval` is set to 8 days to make sure that if there is no payment (no overdue trigger), the state will be correctly recomputed and transition to `CANCELLATION` 8 days later
+* `CANCELLATION`:
+** `subscriptionCancellationPolicy` is set to `END_OF_TERM` to indicate that subscriptions should be cancelled in such a way that we do not generate credit for the account (no proration)
+
+==== Some Important Notes
+
+. The definition order of the states in the XML configuration file is important: You must have the first state at the bottom and then all the way up to the last state (as shown in our example).
+
+. The overdue state names (`name` attribute of `state` tag) should not contain spaces. In case a space is specified in the state name, an error will occur while uploading the overdue XML file.
+
+==== Uploading Overdue Configuration
+
+The path of the overdue configuration file can be specified as a property in the https://docs.killbill.io/latest/userguide_configuration.html#global_configuration_properties[Kill Bill Configuration File] as follows:
+[source,properties]
+----
+org.killbill.overdue.uri=file:///<path>/overdue.xml
+----
+
+Alternately, you can upload the overdue configuration on a per-tenant basis by hitting the following endpoint:
+
+[source,bash]
+----
+curl -v \
+-u 'admin:password' \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: text/xml" \
+-H "X-Killbill-CreatedBy: stephane" \
+-X POST \
+-d @/VALID_PATH/overdue.xml \
+"http://127.0.0.1:8080/1.0/kb/overdue/xml"
+----
+
+
+=== Payment Retries System Configuration
+
+The scenario defined above also requires the payments to be attempted 4 times with a gap of 1,8, 4 and 7 days between attempts. Thus, the payment retry system needs to be configured as per this schedule. 
+
+
+The payment retry schedule can be configured as a property in the https://docs.killbill.io/latest/userguide_configuration.html#global_configuration_properties[Kill Bill Configuration File] as follows:
+[source,properties]
+----
+org.killbill.payment.retry.days=1,8,4,7
+----
+
+Alternately, you can upload the payment retry schedule on a https://docs.killbill.io/latest/userguide_configuration.html#_per_tenant_properties[per-tenant] basis by hitting the following endpoint:
+
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H 'X-Killbill-ApiSecret: lazar' \
+-H "Content-Type: text/plain" \
+-H 'X-Killbill-CreatedBy: stephane' \
+-X POST \
+--data-binary '{"org.killbill.payment.retry.days":"1,8,4,7"}' \
+"http://127.0.0.1:8080/1.0/kb/tenants/uploadPerTenantConfig"
+----
+
+Additionally, if you need more granularity in how you want to retry payments, you can implement your own logic in a https://docs.killbill.io/latest/payment_control_plugin.html[Payment Control Plugin] (which goes beyond the scope of this tutorial).
+
+[[customers]]
+== Some Customer Flows
+
+Let us now take a look at some typical customer flows and understand how the payment retry system and overdue system will function. 
+
+=== Flow 1 - Good Customer, No issue with payment
+
+Let us first understand what happens when there is no issue with the payment:
+
+image::../assets/img/overdue/overdue-flow1.svg[width=700,align=center]
+
+Immediately after the customer subscribes, a $0 invoice is created to indicate the customer is in TRIAL. 10 days later, the customer moves out of TRIAL and the system generates a $10 invoice for the month. At this point, the system attempts to make a payment which is successful. 
+
+So, in this case, the payment retry system *DOES NOT* kick-in.
+
+
+=== Flow 2 - Good Customer, fixes payment issue during retry flow
+
+Next, suppose the customer's credit card does not have enough funds to cover the payment initially but the customer fixes this issue later on:
+
+image::../assets/img/overdue/overdue-flow2.svg[width=850,align=center]
+
+As before, the system attempts a payment after the trial period. Since this payment fails, the payment retry system is activated. It retries a payment *1* day later (on `2021-08-07`). The customer then fixes his/her credit card issue on `2021-08-09`. The payment retry system which is scheduled to run again *8* days later runs on `2021-08-15`. At this point, the payment is successful, so no more payments are attempted.
+
+=== Flow 3 - Good Customer, fixes payment issue during overdue flow
+
+In the next scenario, let us see what happens when the customer fixes his/her credit card issue after the overdue flow has kicked in:
+
+image::../assets/img/overdue/overdue-flow3.svg[align=center]
+
+As before, the system attempts a payment after the trial period which fails. The payment retry system then attempts the payment after *1* day(on `2021-08-07`) and again after *8* days(on `2021-08-15`). On `2021-08-16`, 10 days have elapsed since the first unpaid invoice. So, the overdue system is activated which moves the account to the `WARNING` state. The customer then fixes his/her credit card issue on `2021-08-18`.The payment retry system (which has already made *2* payment attempts), is scheduled to make the third payment attempt *4* days after the previous payment attempt. The previous payment attempt was on `2021-08-15` so the payment retry system attempts a payment on `2021-08-19`. Since the payment issue is now fixed, the payment is successful. So, the account is moved back to the `CLEAR` state.
+
+=== Flow 4 - Bad Customer, does not fix payment issue
+
+Let us now consider what happens when the customer is a bad customer and does not fix the payment issue:
+
+image::../assets/img/overdue/overdue-flow4.svg[align=center]
+
+As in the case of the previous flow, the payment retry system retries the payment two times on `2021-08-07` and on `2021-08-15` after which the overdue flow then kicks in and moves the account to the `WARNING` state on `2021-08-16`. The payment retry system makes the the third payment attempt on `2021-08-19` which fails. The Overdue system (which is configured to run *4* days after the previous run) runs on `2021-08-20` and moves the account to the `BLOCKED` state. Since the customer does not fix the payment issue, the payment fails when the payment retry system attempt it the fourth time on `2021-08-26`. The Overdue system is configured to run one more time after *7* day after the previous run. Since the Overdue system was previously run on `2021-08-20`, it runs on `2021-08-27` and moves the account to the `CANCELLATION` state. 
+
+[[testing]]
+== Configuring the Payment Test Plugin
+
+In order to test the system, one must be able to make payments fail. We have created a https://github.com/killbill/killbill-payment-test-plugin[_Payment Test Plugin_] that can be configured through an api  call to make payments fail. 
+
+The plugin can be installed using any of the methods specified in the https://docs.killbill.io/latest/plugin_installation.html#_plugin_installation[__Plugin Installation Instructions__].
+
+For example, to install the plugin via https://github.com/killbill/killbill-cloud/tree/master/kpm[kpm], you need to run the following command:
+
+[source,bash]
+----
+kpm install_java_plugin 'payment-test' --destination="<path_to_install_plugin>"
+----
+
+== Testing the System
+
+Now that we have everything ready, we can test the system. We will be simulating the following flow:
+
+image::../assets/img/overdue/overdue-test-flow.svg[width=850,align=center]
+
+So, we will be doing the following:
+
+* Create an account
+* Add default payment matching our test payment plugin
+* Create a subscription
+* Move the clock after the trial and observe first successful payment
+* Configure payment plugin to fail payments
+* Move the clock a month later and observe first failed payment
+* Move clock +1 day and observe first payment retry
+* Move clock +8 day and observe second payment retry
+* Move clock +1 day and first overdue state `WARNING`
+* Move clock +3 day and observe third payment retry
+* Move clock +1 day and observe second overdue state `BLOCKED`
+* Move clock +1 day and configure payment plugin to succeed
+* Move clock +5 day (7 days from last payment attempt) and observe fourth payment retry which is successful
+
+*Notes:*
+
+. For simplicity, we are using dates (e.g `2021-01-10`) when manipulating the Kill Bill clock instead of fully qualified datetimes (`2021-01-10T01:43:23.000Z`). Passing such a date will end up moving the Kill Bill clock to a given point in time and that point in time may end up before the exact time of the event we are trying to trigger. In such a case, retry moving the clock by one day and that should trigger it. An alternative is to specify the exact datetime when moving the clock. This would require retrieving the account object and obtaining the `reference_time` field from it to know the exact date time.
+
+. As you proceed with the steps below, you can verify each step by viewing the account in Kaui. The main account screen includes an `OVERDUE STATUS` field in the `Billing Info` section. The `payment` and `invoices` tab include information about payments and invoices. The `Timeline` tab within the account screen includes information about payment retries.  
++
+. Start Kill Bill Ensure either on https://docs.killbill.io/latest/getting_started.html#_aws_one_click[__AWS__], https://docs.killbill.io/latest/getting_started.html#_docker[__Docker__], https://docs.killbill.io/latest/getting_started.html#_tomcat[__Tomcat__] or in  https://docs.killbill.io/latest/development.html#_running_the_application[__standalone__] mode.
++
+. Set the date to `2021-07-26` (This is not mandatory, but would make the flow in sync with the diagram above):
++
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H 'X-Killbill-CreatedBy: demo' \
+-X POST \
+"http://127.0.0.1:8080/1.0/kb/test/clock?requestedDate=2021-07-26"
+----
++
+. Create your account:
++
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H "X-Killbill-CreatedBy: demo" \
+-X POST \
+--data-binary '{"name":"Arthur","email":"arthur@laposte.fr","externalKey":"arthur","currency":"USD"}' \
+"http://127.0.0.1:8080/1.0/kb/accounts"
+----
++
+. Add the payment method (assuming `60035793-cbe5-472a-8bd8-3c67cc3beaf4` is the accountId):
++
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H "X-Killbill-CreatedBy: demo" \
+-X POST \
+--data-binary '{"pluginName":"killbill-payment-test","pluginInfo":{}}' \
+"http://127.0.0.1:8080/1.0/kb/accounts/60035793-cbe5-472a-8bd8-3c67cc3beaf4/paymentMethods?isDefault=true"
+----
++
+. Create a subscription and verify that a $0 invoice is generated:
++
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H "X-Killbill-CreatedBy: demo" \
+-X POST \
+--data-binary '{"accountId":"60035793-cbe5-472a-8bd8-3c67cc3beaf4","externalKey":"s1_arthur","productName":"Movies","productCategory":"BASE","billingPeriod":"MONTHLY","priceList":"DEFAULT"}' \
+"http://127.0.0.1:8080/1.0/kb/subscriptions"
+----
+
+. Move the clock to reach end of trial (`2021-08-06`) and see first payment:
++
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H 'X-Killbill-CreatedBy: demo' \
+-X POST \
+"http://127.0.0.1:8080/1.0/kb/test/clock?requestedDate=2021-08-06"
+----
++
+. Configure the payment plugin to fail subsequent payments (You can refer to the  https://github.com/killbill/killbill-payment-test-plugin#global-state-configuration[_Payment Test Plugin Global State Configuration_] to understand this better).
++
+[source,bash]
+----
+curl -v \
+-u'admin:password' \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H 'X-Killbill-CreatedBy: demo' \
+-X POST \
+--data-binary '{"CONFIGURE_ACTION":"ACTION_RETURN_PLUGIN_STATUS_ERROR", "METHODS":"purchasePayment"}' \
+ -v 'http://127.0.0.1:8080/plugins/killbill-payment-test/configure'
+----
++
+. Move the clock to the next month (`2021-09-06`) and observe first failed payment:
++
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H 'X-Killbill-CreatedBy: demo' \
+-X POST \
+"http://127.0.0.1:8080/1.0/kb/test/clock?requestedDate=2021-09-06"
+----
++
+. Move clock +1 day (`2021-09-07`) and observe first payment retry:
++
+[source,bash]
+----
+curl -v \
+-u admin:password \
+-H "X-Killbill-ApiKey: bob" \
+-H "X-Killbill-ApiSecret: lazar" \
+-H "Content-Type: application/json" \
+-H 'X-Killbill-CreatedBy: demo' \
+-X POST \
+"http://127.0.0.1:8080/1.0/kb/test/clock?requestedDate=2021-09-07"
+----
++
+. Move clock +8 day (`2021-09-15`) and observe second payment retry. 
++
+. Move clock +1 day (`2021-09-16`) and verify that the account is in `WARNING` status.
++
+. Move clock +3 day (`2021-09-19`) and observe third payment retry. 
++
+. Move clock +1 day (`2021-09-20`) and verify that the account is in `BLOCKED` status.
++
+. Move clock +1 day (`2021-09-21`) and configure the payment plugin to succeed:
++
+[source,bash]
+----
+curl -v \
+-u'admin:password' \
+-H "X-Killbill-ApiKey: bob" \
+-H 'X-Killbill-ApiSecret: lazar' \
+-H "Content-Type: application/json" \
+-H 'X-Killbill-CreatedBy: demo' \
+-X POST \
+--data-binary '{"CONFIGURE_ACTION":"ACTION_CLEAR"}' \
+ -v 'http://127.0.0.1:8080/plugins/killbill-payment-test/configure'
+----
++
+. Move clock +5 day (`2021-09-26`) and observe the final payment retry. Verify that the payment is successful and the account is moved to the `GOOD` status.
+
+==  Default Payment Retry Schedule and Overdue Configuration
+
+Even if the payment retry schedule is not configured explicitly, there is a default schedule of `8,8,8`. This means that a first retry would happen 8 days after the initial failure, and then if the first retry attempt failed, another attempt would be scheduled 8 days later and then finally a last one 8 days after that. 
+
+If the overdue XML is not configured explicitly, there is a default overdue XML as specified https://github.com/killbill/killbill/blob/29762c013855f7e105861eecd6d5cb393ef98cb8/overdue/src/main/resources/NoOverdueConfig.xml[_here_]. However, this does not do anything. So, even if a user has unpaid invoices, the user's account will not be overdue.
+
+== More About Overdue Configuration File
+
+Earlier, we have taken a look at a basic overdue configuration file. This section provides more details about the contents of this file.
+
+=== Overdue State Information
+
+At its core, the overdue configuration file contains a list of the various states that a customer's account may go through if the customer does not pay. Each state includes the information listed in the table below.
+
+[cols="a,a,a,a"]
+|===
+| *Information*   |*Type*   |*Description* |*Example*  
+//----------------------
+|name   |Attribute on `state` tag   |Name given to the state | 
+[source, xml]
+<state name="WARNING">  
+|condition     |Tag within `state` |Specifies the condition to be evaluated. The account will enter this overdue state only if the condition evaluates to true.  | See <<overdue_conditions, "Overdue Conditions">>
+|externalMessage   |Tag within `state`    |Optional message which can be retrieved by plugins listening to overdue events, and displayed to the user. Any String value can be specified  |
+[source, xml]
+<externalMessage>
+Reached WARNING
+</externalMessage>
+|subscriptionCancellation + 
+Policy   |Tag within `state`|Specifies whether or not to cancel the subscriptions associated with the account (and the cancellation policy that should be used) when this overdue state is reached. Possible values are `NONE`, `IMMEDIATE`, `END_OF_TERM`)     |
+[source, xml]
+<subscriptionCancellationPolicy>
+END_OF_TERM
+</subscriptionCancellationPolicy>`
+|blockChanges   |Tag within `state`|Specifies whether the customer is allowed to make any plan change on the subscriptions when this overdue state is reached. A true/false value needs to be specified. |
+[source, xml]
+<blockChanges>
+true
+</blockChanges>
+|disableEntitlement + 
+AndChangesBlocked  |Tag within `state`|Specifies whether the subscriptions should be paused (which means entitlement and billing will be disabled and changes will be blocked) when this overdue state is reached. A true/false value needs to be specified.    |
+[source, xml]
+<disableEntitlementAndChangesBlocked>
+true
+</disableEntitlementAndChangesBlocked>
+|autoReevaluation + 
+Interval   |Tag within `state`   |Specifies the duration after which the overdue state should be reevaluated. The duration needs to be specified with a `unit` (one of `DAYS`, `WEEKS`, `MONTHS`, `YEARS`, `UNLIMITED`) and an integer value. 
+|
+[source, xml]
+<autoReevaluationInterval>
+<unit>DAYS</unit>
+<number>4</number>
+</autoReevaluationInterval>
+|isClearState   |Tag within `state`   |Specifies whether the current state is a clear state. A true/false value needs to be specified. |
+[source, xml]
+<isClearState>true</isClearState>
+|===
+
+[[overdue_conditions]]
+=== Overdue Conditions
+
+The following table lists the various overdue conditions. Note that it is also possible to combine multiple conditions in which case _ALL_ the specified conditions need to evaluate to true for the account to enter the particular overdue state.
+
+[cols="a,a,a"]
+
+|===
+|*Condition*   |*Description* |*Example*
+//-------------
+|numberOfUnpaid + 
+InvoicesEqualsOrExceeds   |Specifies that the overdue state should kick in when the number of unpaid invoices equals or exceeds the specified value. An integer value needs to be specified.|  
+[source, xml]
+<condition>
+<numberOfUnpaidInvoicesEqualsOrExceeds>2
+</numberOfUnpaidInvoicesEqualsOrExceeds>
+</condition>
+|totalUnpaidInvoice + 
+BalanceEqualsOrExceeds   | Specifies that the overdue state should kick in when the total unpaid invoice balance equals or exceeds the specified value. A decimal value needs to be specified.  |
+[source, xml]
+<condition> 
+  <totalUnpaidInvoiceBalanceEqualsOrExceeds>1.00
+   </totalUnpaidInvoiceBalanceEqualsOrExceeds>
+</condition> 
+|timeSinceEarliestUnpaid + 
+InvoiceEqualsOrExceeds   |Specifies that the overdue state should kick in when the specified duration has elapsed since the last unpaid invoice. The duration needs to be specified with a `unit` (one of `DAYS`, `WEEKS`, `MONTHS`, `YEARS`, `UNLIMITED`) and an integer value  | 
+[source, xml]
+<condition>
+  <timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+    <unit>DAYS</unit>
+    <number>10</number>
+  </timeSinceEarliestUnpaidInvoiceEqualsOrExceeds>
+</condition>
+|controlTagInclusion   |Specifies that the overdue state should kick in when the account is tagged with the specified control tag. | 
+[source, xml]
+<condition>
+  <controlTagInclusion>TEST
+  </controlTagInclusion>
+</condition>
+|controlTagExclusion   |Specifies that the overdue state should kick in when the account is NOT tagged with the specified control tag. |
+[source, xml]
+<condition>
+  <controlTagExclusion>TEST
+  </controlTagExclusion>
+</condition>
+|===
+
+=== Other Important Tags
+
+* `initialReevaluationInterval` - Top level tag. Specifies the duration after which the overdue system should first kick in. The duration needs to be specified with a `unit` (one of `DAYS`, `WEEKS`, `MONTHS`, `YEARS`, `UNLIMITED`) and an integer value. 
+
+Example:
+
+[source,xml]
+<initialReevaluationInterval>
+  <unit>DAYS</unit>
+  <number>5</number>
+</initialReevaluationInterval>
+
+=== Some Sample Overdue Configurations
+
+The following are some sample `overdue.xml` files:
+
+* https://github.com/killbill/killbill-docs/tree/9ada1c053cb4e3dae9ded7f8b2bb311fff59375e/overdue-configurations/overdueWithNumberOfUnpaidInvoicesCondition.xml[overdueWithNumberOfUnpaidInvoicesCondition.xml]
+
+* https://github.com/killbill/killbill-docs/tree/9ada1c053cb4e3dae9ded7f8b2bb311fff59375e/overdue-configurations/overdueWithTotalUnpaidInvoiceBalanceCondition.xml[overdueWithTotalUnpaidInvoiceBalanceCondition.xml]
+
+* https://github.com/killbill/killbill-docs/tree/9ada1c053cb4e3dae9ded7f8b2bb311fff59375e/overdue-configurations/overdueWithControlTag.xml[overdueWithControlTag.xml]
+
+* https://github.com/killbill/killbill-docs/tree/9ada1c053cb4e3dae9ded7f8b2bb311fff59375e/overdue-configurations/overdueWithExclusionControlTag.xml[overdueWithExclusionControlTag.xml]
+
+* https://github.com/killbill/killbill-docs/tree/9ada1c053cb4e3dae9ded7f8b2bb311fff59375e/overdue-configurations/overdueWithMultipleConditions.xml[overdueWithMultipleConditions.xml]
+
+=== Overdue.xml Validation
+
+The `overdue.xml` file can be validated using the `overdue.xsd` file available https://docs.killbill.io/latest/overdue.xsd[here].
+
+
+[[platform_use]]
+== Use of the Platform
+
+=== Use of the APIs
+
+When a customer attempts to use the service, the web site *could* verify if the customer is entitled to receive the service:
+
+1. It should first retrieve the overdue status (at the account level) using the `GET /1.0/kb/accounts/{accountId}/overdue` api
+2. It should then retrieve the subscriptions associated with the account `GET /1.0/kb/accounts/{accountId}/bundles` (or if the subscriptionId was cached it could use `GET /1.0/kb/subscriptions/{subscriptionId}`) to verify the individual subscriptions status
+
+The endpoint `GET /1.0/kb/accounts/{accountId}/overdue` will return the following json:
+
+[source,json]
+----
+{
+  "blockChanges": true,
+  "clearState": false,
+  "daysBetweenPaymentRetries": 1,
+  "disableEntitlementAndChangesBlocked": false,
+  "externalMessage": "Reached WARNING",
+  "name": "WARNING",
+  "reevaluationIntervalDays": 4
+}
+----
+
+If the `disableEntitlementAndChangesBlocked` is set to true, it means that the customer is not entitled to the service associated to any subscriptions.
+
+Note that retrieving subscriptions through the `GET /1.0/kb/subscriptions/{subscriptionId}` will not directly indicate the overdue status, and so both calls must be made to have a complete picture of the entitlement when the overdue system has been configured.
+
+When retrieving entitlement/overdue status, the web site could be implemented to take all kinds of actions such as displaying warning message, degrading experience, emailing customer, ...
+
+=== Custom Plugins
+
+In the previous section, we discussed a possible implementation where the web site queries the billing system to figure out the entitlement story attached to a customer (when he logs-in for instance). Another pattern is to create a custom notification plugin that will listen to `Overdue` events and take appropriate action. The plugin would need to handle the `OVERDUE_CHANGE` event. 
+
+We have a https://docs.killbill.io/latest/notification_plugin.html[tutorial] that demonstrates how to create a notification plugin in Java. We also have a sample https://github.com/killbill/killbill-hello-world-ruby-plugin/blob/master/lib/helloworld/user_listener.rb[Ruby notification plugin] that can be used to create a notification plugin in Ruby.
+
+Such plugins can be used for the following purpose:
+
+* Email/Notify user about the new state (We already have a Java  https://github.com/killbill/killbill-email-notifications-plugin[email notification plugin] which can be extended to handle `OVERDUE_CHANGE` events)
+* Take action to modify the experience (based on the state name): for instance to degrade the service, modify the login flow to prompt for payment, ...
+
+== Additional Resources
+
+* https://docs.killbill.io/latest/userguide_subscription.html[Subscription Billing User Guide]
+* https://docs.killbill.io/latest/userguide_configuration.html[Kill Bill Configuration Guide]
